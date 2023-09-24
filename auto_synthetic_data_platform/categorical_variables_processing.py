@@ -1,6 +1,6 @@
 """A categorical values processing module of the Google EMEA gPS Data Science Auto Synthetic Data Platform."""
 import logging
-from typing import Final
+from typing import Any, Final, Mapping
 import pandas as pd
 
 _MILD_IMBALANCE_UPPER_LIMIT: Final[float] = 0.4
@@ -109,3 +109,37 @@ def check_categorical_column(
       categorical_column_data=categorical_column_data,
       logger=logger,
   )
+
+
+def process_categorical_columns(
+    *,
+    dataframe: pd.DataFrame,
+    column_metadata: Mapping[str, list[Any]],
+    logger: logging.Logger,
+) -> pd.DataFrame:
+  """Preprocesses categorical columns of the dataframe.
+
+  Args:
+    dataframe: A dataframe for the preprocessing.
+    column_metadata: A mapping between "categorical" and "numerical" data types
+      and column names.
+    logger: A logger object to log and save preprocessing messages.
+
+  Returns:
+    A dataframe with processed categorical columns.
+  """
+  categorical_column_names = column_metadata.get("categorical", None)
+  if not categorical_column_names:
+    logger.info("No categorical columns are specified for the dataframe.")
+    return dataframe
+  categorical_dataframe = dataframe[categorical_column_names]
+  for (
+      categorical_column_name,
+      categorical_column_data,
+  ) in categorical_dataframe.items():
+    check_categorical_column(
+        categorical_column_name=categorical_column_name,
+        categorical_column_data=categorical_column_data,
+        logger=logger,
+    )
+  return dataframe

@@ -1,11 +1,17 @@
 """Tests for utility functions in categorical_variables_processing.py."""
 import pathlib
 import tempfile
+from absl.testing import absltest
 from absl.testing import parameterized
 from auto_synthetic_data_platform import categorical_variables_processing
 from auto_synthetic_data_platform import experiment_logging
 import numpy as np
 import pandas as pd
+
+_DATAFRAME = pd.DataFrame.from_dict({
+    "categorical_column": [1, 2, 3, 4],
+    "numerical_column": [1.01, 2.91, 3.05, 1000000],
+})
 
 
 class CategoricalVariablesProcessingTests(parameterized.TestCase):
@@ -84,3 +90,49 @@ class CategoricalVariablesProcessingTests(parameterized.TestCase):
       with log_path.open() as logs:
         logged_message = logs.readlines()
       self.assertTrue(expected_log_excerpt in logged_message[0])
+
+  def test_process_categorical_columns_no_categorical_columns(self):
+    with tempfile.TemporaryDirectory() as temporary_directory:
+      column_metadata = {"numerical": ["numerical_column"]}
+      logger = experiment_logging.setup_logger(
+          experiment_directory=pathlib.Path(temporary_directory),
+          logger_name="test",
+      )
+      actual_output = (
+          categorical_variables_processing.process_categorical_columns(
+              dataframe=_DATAFRAME,
+              column_metadata=column_metadata,
+              logger=logger,
+          )
+      )
+      dataframe_equal = actual_output.equals(_DATAFRAME)
+      expected_message = (
+          "No categorical columns are specified for the dataframe."
+      )
+      log_path = pathlib.Path(temporary_directory).joinpath(
+          "logs/test_logs.log"
+      )
+      with log_path.open() as logs:
+        logged_message = logs.readlines()
+      messages_equal = expected_message in logged_message[0]
+      self.assertTrue(all([dataframe_equal, messages_equal]))
+
+  def test_process_categorical_columns_with_categorical_columns(self):
+    with tempfile.TemporaryDirectory() as temporary_directory:
+      column_metadata = {"categorical": ["categorical_column"]}
+      logger = experiment_logging.setup_logger(
+          experiment_directory=pathlib.Path(temporary_directory),
+          logger_name="test",
+      )
+      actual_output = (
+          categorical_variables_processing.process_categorical_columns(
+              dataframe=_DATAFRAME,
+              column_metadata=column_metadata,
+              logger=logger,
+          )
+      )
+      pd.testing.assert_frame_equal(actual_output, _DATAFRAME)
+
+
+if __name__ == "__main__":
+  absltest.main()
