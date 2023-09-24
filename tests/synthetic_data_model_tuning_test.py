@@ -138,3 +138,53 @@ class SyntheticDataModelTuningTests(parameterized.TestCase):
           count=_COUNT, model=model_path
       )
       self.assertEqual(actual_output["categorical_column"].loc[0], 4)
+
+  def test_list_relevant_evaluation_row_names(self):
+    input_metrics = {
+        "sanity": ["close_values_probability", "data_mismatch"],
+        "stats": ["inv_kl_divergence", "jensenshannon_dist"],
+        "performance": ["xgb", "mlp"],
+        "privacy": ["k-anonymization", "k-map"],
+    }
+    actual_output = {
+        evaluation_category: (
+            synthetic_data_model_tuning.list_relevant_evaluation_row_names(
+                evaluation_category=evaluation_category,
+                evaluation_metrics=evaluation_metrics,
+            )
+        )
+        for evaluation_category, evaluation_metrics in input_metrics.items()
+    }
+    expected_output = {
+        "sanity": ["sanity.close_values_probability", "sanity.data_mismatch"],
+        "stats": ["stats.inv_kl_divergence", "stats.jensenshannon_dist"],
+        "performance": ["performance.xgb", "performance.mlp"],
+        "privacy": ["privacy.k-anonymization", "privacy.k-map"],
+    }
+    self.assertEqual(actual_output, expected_output)
+
+  def test_verify_column_names(self):
+    evaluation_results_mapping = dict(
+        model_name=pd.DataFrame({"mean": [0], "incompatible_column": [0]})
+    )
+    with self.assertRaisesRegex(ValueError, "miss the required"):
+      synthetic_data_model_tuning.verify_column_names(
+          evaluation_results_mapping=evaluation_results_mapping,
+      )
+
+  def test_verify_indexes(self):
+    model_a_dataframe = pd.DataFrame(
+        {"mean": [0], "incompatible_column": [0]}, index=["performance"]
+    )
+    model_b_dataframe = pd.DataFrame(
+        {"mean": [0], "incompatible_column": [0]}, index=["stats"]
+    )
+    evaluation_results_mapping = dict(
+        model_a=model_a_dataframe, model_b=model_b_dataframe
+    )
+    with self.assertRaisesRegex(
+        ValueError, "Not all evaluation results have identicial indexes"
+    ):
+      synthetic_data_model_tuning.verify_indexes(
+          evaluation_results_mapping=evaluation_results_mapping,
+      )

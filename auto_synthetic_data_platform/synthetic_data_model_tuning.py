@@ -1,6 +1,6 @@
 import datetime
 import pathlib
-from typing import Any, Final, Literal, Mapping, TypeVar
+from typing import Any, Final, Literal, Mapping, Sequence, TypeVar
 import pandas as pd
 from synthcity import plugins
 from synthcity import utils
@@ -70,6 +70,7 @@ _WORST_EVALUATION_SCORE_HIGHLIGHT: Final[str] = "background-color: red;"
 _DEFAULT_EVALUATION_SCORE_HIGHLIGHT: Final[str] = ""
 _BaseLoaderType = TypeVar("_BaseLoaderType", bound=dataloader.DataLoader)
 _BaseModelType = TypeVar("_BaseModelType", bound=plugins.Plugin)
+_REQUIRED_EVALUATION_COLUMNS: Final[list] = ["mean", "direction"]
 
 
 def split_data_loader_into_train_test(
@@ -223,3 +224,64 @@ def generate_synthetic_data_with_synthetic_data_model(
         count=count, random_state=random_state, **generate_kwargs
     )
   return model.generate(count=count, random_state=random_state).dataframe()
+
+
+def list_relevant_evaluation_row_names(
+    *, evaluation_category: Sequence[str], evaluation_metrics: Sequence[str]
+) -> Sequence[str]:
+  """Returns a sequence with relevant evaluation metric names.
+
+  Args:
+    evaluation_category: A sequence with an evaluation category name.
+    evaluation_metrics: A sequence with an evaluation metric name.
+  """
+  return [
+      ".".join([category, metric])
+      for category, metric in zip(
+          [evaluation_category] * len(evaluation_metrics), evaluation_metrics
+      )
+  ]
+
+
+def verify_column_names(
+    *,
+    evaluation_results_mapping: Sequence[Mapping[str, pd.DataFrame]],
+) -> None:
+  """Verifies that all evaluation results contain the required column names.
+
+  Raises:
+    ValueError: An error if an evaluation results doesn't contain both
+    "mean" and "direction" columns.
+  """
+  for model_name, evaluation_scores in evaluation_results_mapping.items():
+    actual_columns = evaluation_scores.columns.to_list()
+    if not set(_REQUIRED_EVALUATION_COLUMNS).issubset(actual_columns):
+      missing_columns = list(
+          set(_REQUIRED_EVALUATION_COLUMNS) - set(actual_columns)
+      )
+      raise ValueError(
+          f"The evaluation results for model {model_name!r} miss the required"
+          f" column(s): {', '.join(missing_columns)}. It must contain:"
+          f" {', '.join(_REQUIRED_EVALUATION_COLUMNS)}."
+      )
+
+
+def verify_indexes(
+    *,
+    evaluation_results_mapping: Sequence[Mapping[str, pd.DataFrame]],
+) -> None:
+  """Verifies if all evaluation results contain the same indexes.
+
+  Raises:
+    ValueError: An error if any of the evaluation has indexes different than
+    the rest.
+  """
+  indexes = [
+      evaluation_results.index.to_list()
+      for evaluation_results in evaluation_results_mapping.values()
+  ]
+  if not indexes[1:] == indexes[:-1]:
+    raise ValueError(
+        f"Not all evaluation results have identicial indexes (evaluation"
+        f" tests)."
+    )
