@@ -1,7 +1,10 @@
 """An end-to-end real data preprocessing module of the Google EMEA gPS Data Science Auto Synthetic Data Platform."""
+import functools
 import logging
+import pathlib
 from typing import Any, Final, Mapping
 from auto_synthetic_data_platform import categorical_variables_processing
+from auto_synthetic_data_platform import experiment_logging
 from auto_synthetic_data_platform import missing_variables_processing
 from auto_synthetic_data_platform import numerical_variables_processing
 import pandas as pd
@@ -68,3 +71,73 @@ def preprocess_dataframe(
         " It's likely to lower the synthetic data model quality."
     )
   return processed_dataframe
+
+
+class Preprocessor:
+  """Analyses and preprocess the input dataframe.
+
+  Attributes:
+    dataframe_path: A path to the dataframe with the real data. The package will
+      use it to train a synthetic data model and then to generate a fake version
+      of this dataframe.
+    experiment_directory: A path to the experiment directory where all the
+      experiment artifacts will be saved.
+    column_metadata: A mapping between "categorical" and "numerical" data types
+      and column names.
+    preprocess_metadata: A sequence with mappings between preprocessing variable
+      names and their values used to preprocess the input dataframe with the
+      real data before training any synthetic data models.
+    input_dataframe: An input dataframe with the real data.
+    output_dataframe: An output dataframe with the preprocessed real data.
+    logger: A logger object to log and save preprocessing messages.
+  """
+
+  def __init__(
+      self,
+      *,
+      dataframe_path: pathlib.Path,
+      experiment_directory: pathlib.Path,
+      column_metadata: Mapping[str, list[Any]],
+      preprocess_metadata: Mapping[str, Any] | None = None,
+  ) -> None:
+    """Initializes the Preprocessor class.
+
+    Args:
+      dataframe_path: A path to the dataframe with the real data. The package
+        will use it to train a synthetic data model and then to generate a fake
+        version of this dataframe.
+      experiment_directory: A path to the experiment directory where all the
+        experiment artifacts will be saved.
+      column_metadata: A mapping between "categorical" and "numerical" data
+        types and column names.
+      preprocess_metadata: A sequence with mappings between preprocessing
+        variable names and their values used to preprocess the input dataframe
+        with the real data before training any synthetic data models.
+    """
+    self.dataframe_path = dataframe_path
+    self.experiment_directory = experiment_directory
+    self.column_metadata = column_metadata
+    self.preprocess_metadata = preprocess_metadata
+
+  @functools.cached_property
+  def input_dataframe(self) -> pd.DataFrame:
+    """Returns the input dataframe with the real data."""
+    return pd.read_csv(self.dataframe_path)
+
+  @functools.cached_property
+  def logger(self) -> logging.Logger:
+    """Returns a logger object for logging and saving preprocessing messages."""
+    return experiment_logging.setup_logger(
+        experiment_directory=self.experiment_directory,
+        logger_name="preprocessing",
+    )
+
+  @functools.cached_property
+  def output_dataframe(self) -> pd.DataFrame:
+    """Returns the output dataframe with the preprocessed real data."""
+    return preprocess_dataframe(
+        dataframe=self.input_dataframe,
+        column_metadata=self.column_metadata,
+        preprocess_metadata=self.preprocess_metadata,
+        logger=self.logger,
+    )

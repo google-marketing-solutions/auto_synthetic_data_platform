@@ -1,4 +1,5 @@
 """Tests for utility functions in preprocessing.py."""
+import logging
 import pathlib
 import tempfile
 from absl.testing import absltest
@@ -93,3 +94,52 @@ class PreprocessingTests(absltest.TestCase):
           in logged_message[-1]
       )
       self.assertTrue(all([dataframe_equal, messages_equal]))
+
+
+class PreprocessorTests(absltest.TestCase):
+
+  def test_preprocessor_input_dataframe(self):
+    with tempfile.TemporaryDirectory() as temporary_directory:
+      dataframe_path = pathlib.Path(temporary_directory).joinpath("test.csv")
+      _DATAFRAME.to_csv(dataframe_path, index=False)
+      preprocessor = preprocessing.Preprocessor(
+          dataframe_path=pathlib.Path(dataframe_path),
+          experiment_directory=temporary_directory,
+          column_metadata={
+              "categorical": ["categorical_column"],
+              "numerical": ["numerical_column"],
+          },
+      )
+      pd.testing.assert_frame_equal(preprocessor.input_dataframe, _DATAFRAME)
+
+  def test_preprocessor_logger(self):
+    with tempfile.TemporaryDirectory() as temporary_directory:
+      dataframe_path = pathlib.Path(temporary_directory).joinpath("test.csv")
+      _DATAFRAME.to_csv(dataframe_path, index=False)
+      preprocessor = preprocessing.Preprocessor(
+          dataframe_path=dataframe_path,
+          experiment_directory=pathlib.Path(temporary_directory),
+          column_metadata={
+              "categorical": ["categorical_column"],
+              "numerical": ["numerical_column"],
+          },
+      )
+      self.assertIsInstance(preprocessor.logger, logging.Logger)
+
+  def test_preprocessor_output_dataframe(self):
+    with tempfile.TemporaryDirectory() as temporary_directory:
+      dataframe_path = pathlib.Path(temporary_directory).joinpath("test.csv")
+      _DATAFRAME.to_csv(dataframe_path, index=False)
+      preprocessor = preprocessing.Preprocessor(
+          dataframe_path=dataframe_path,
+          experiment_directory=pathlib.Path(temporary_directory),
+          column_metadata={
+              "categorical": ["categorical_column"],
+              "numerical": ["numerical_column"],
+          },
+      )
+      pd.testing.assert_frame_equal(preprocessor.input_dataframe, _DATAFRAME)
+
+
+if __name__ == "__main__":
+  absltest.main()
