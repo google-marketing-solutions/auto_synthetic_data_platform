@@ -1,8 +1,11 @@
 """Tests for utility functions in synthetic_data_model_tuning.py."""
+import pathlib
+import tempfile
 from typing import Final
 from absl.testing import parameterized
 from auto_synthetic_data_platform import synthetic_data_model_tuning
 import pandas as pd
+from synthcity import plugins
 from synthcity.plugins.core import dataloader
 
 _DATAFRAME = pd.DataFrame.from_dict({
@@ -20,6 +23,10 @@ _METRICS: Final[dict] = {
 _DATA_LOADER = dataloader.GenericDataLoader(
     _DATAFRAME, train_size=0.5, target_column="numerical_column"
 )
+_NUMBER_OF_TRIALS: Final[int] = 1
+_OPTIMIZATION_DIRECTION: Final[str] = "minimize"
+_EVALUATION_METRICS: Final[dict] = {"sanity": ["common_rows_proportion"]}
+_COUNT: Final[int] = 1
 
 
 class SyntheticDataModelTuningTests(parameterized.TestCase):
@@ -66,3 +73,68 @@ class SyntheticDataModelTuningTests(parameterized.TestCase):
           selected_evaluation_metrics=selected_evaluation_metrics,
           reference_evaluation_metrics=_METRICS,
       )
+
+  def test_verify_optimization_direction_and_evaluation_metrics_value_error(
+      self,
+  ):
+    with self.assertRaisesRegex(
+        ValueError, "'incompatible_optimization_metric' not compatible"
+    ):
+      synthetic_data_model_tuning.verify_optimization_direction_and_evaluation_metrics(
+          optimization_direction="incompatible_optimization_metric",
+          selected_evaluation_metrics=_METRICS,
+      )
+
+  def test_verify_experiment_directory(self):
+    with tempfile.TemporaryDirectory() as temporary_directory:
+      experiment_directory = pathlib.Path(temporary_directory).joinpath(
+          "test_directory"
+      )
+      actual_output = synthetic_data_model_tuning.verify_experiment_directory(
+          experiment_directory=experiment_directory
+      )
+      self.assertEqual(str(actual_output), str(experiment_directory))
+
+  def test_generate_synthetic_data_with_the_best_synthetic_data_model(self):
+    with tempfile.TemporaryDirectory() as temporary_directory:
+      experiment_directory = pathlib.Path(temporary_directory)
+      model = plugins.Plugins().get(
+          "dummy_sampler", workspace=experiment_directory
+      )
+      tuner = synthetic_data_model_tuning.SyntheticDataModelTuner(
+          data_loader=_DATA_LOADER,
+          synthetic_data_model=model,
+          task_type="classification",
+          number_of_trials=_NUMBER_OF_TRIALS,
+          optimization_direction=_OPTIMIZATION_DIRECTION,
+          evaluation_metrics=_EVALUATION_METRICS,
+          experiment_directory=experiment_directory,
+      )
+      actual_output = synthetic_data_model_tuning.generate_synthetic_data_with_synthetic_data_model(
+          count=_COUNT, model=tuner.best_synthetic_data_model
+      )
+      self.assertEqual(actual_output["categorical_column"].loc[0], 4)
+
+  def test_generate_synthetic_data_with_the_best_synthetic_data_model_from_path(
+      self,
+  ):
+    with tempfile.TemporaryDirectory() as temporary_directory:
+      experiment_directory = pathlib.Path(temporary_directory)
+      model = plugins.Plugins().get(
+          "dummy_sampler", workspace=experiment_directory
+      )
+      tuner = synthetic_data_model_tuning.SyntheticDataModelTuner(
+          data_loader=_DATA_LOADER,
+          synthetic_data_model=model,
+          task_type="classification",
+          number_of_trials=_NUMBER_OF_TRIALS,
+          optimization_direction=_OPTIMIZATION_DIRECTION,
+          evaluation_metrics=_EVALUATION_METRICS,
+          experiment_directory=experiment_directory,
+      )
+      model_path = pathlib.Path(temporary_directory).joinpath("test_model.pkl")
+      tuner.save_best_synthetic_data_model(model_path=model_path)
+      actual_output = synthetic_data_model_tuning.generate_synthetic_data_with_synthetic_data_model(
+          count=_COUNT, model=model_path
+      )
+      self.assertEqual(actual_output["categorical_column"].loc[0], 4)

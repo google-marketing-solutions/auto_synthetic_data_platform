@@ -1,8 +1,14 @@
-from typing import Final, Literal, Mapping, TypeVar
+import datetime
+import pathlib
+from typing import Any, Final, Literal, Mapping, TypeVar
+import pandas as pd
+from synthcity import plugins
+from synthcity import utils
 from synthcity.plugins.core import dataloader
 
 _MINIMIZE: Final[str] = "minimize"
 _MAXIMIZE: Final[str] = "maximize"
+_AVAILABLE_OPTIMIZATION_DIRECTIONS = (_MINIMIZE, _MAXIMIZE)
 _CLASSIFICATION: Final[str] = "classification"
 _REGRESSION: Final[str] = "regression"
 _SURVIVAL_ANALYSIS: Final[str] = "survival_analysis"
@@ -15,7 +21,55 @@ _AVAILABLE_TASK_TYPES = (
     _TIME_SERIES,
     _TIME_SERIES_SURVIVAL,
 )
+_MINIMIZE_EVALUATION_METRICS: Final[dict] = {
+    "sanity": [
+        "data_mismatch",
+        "common_rows_proportion",
+        "nearest_syn_neighbor_distance",
+        "distant_values_probability",
+    ],
+    "stats": [
+        "jensenshannon_dist",
+        "max_mean_discrepancy",
+        "wasserstein_dist",
+    ],
+    "detection": [
+        "detection_xgb",
+        "detection_mlp",
+        "detection_gmm",
+        "detection_linear",
+    ],
+    "privacy": [
+        "identifiability_score",
+        "DomiasMIA_BNAF",
+        "DomiasMIA_KDE",
+        "DomiasMIA_prior",
+    ],
+}
+_MAXIMIZE_EVALUATION_METRICS: Final[dict] = {
+    "sanity": [
+        "close_values_probability",
+    ],
+    "stats": [
+        "chi_squared_test",
+        "inv_kl_divergence",
+        "ks_test",
+        "prdc",
+        "alpha_precision",
+    ],
+    "performance": ["linear_model", "mlp", "xgb", "feat_rank_distance"],
+    "privacy": [
+        "delta-presence",
+        "k-anonymization",
+        "k-map",
+        "distinct l-diversity",
+    ],
+}
+_BEST_EVALUATION_SCORE_HIGHLIGHT: Final[str] = "background-color: green;"
+_WORST_EVALUATION_SCORE_HIGHLIGHT: Final[str] = "background-color: red;"
+_DEFAULT_EVALUATION_SCORE_HIGHLIGHT: Final[str] = ""
 _BaseLoaderType = TypeVar("_BaseLoaderType", bound=dataloader.DataLoader)
+_BaseModelType = TypeVar("_BaseModelType", bound=plugins.Plugin)
 
 
 def split_data_loader_into_train_test(
@@ -91,3 +145,81 @@ def verify_evaluation_metrics(
             f"{evaluation_metric!r} evaluation metric is not recognized. "
             f"It must be one of: {', '.join(reference_evaluation_metrics)}."
         )
+
+
+def verify_optimization_direction_and_evaluation_metrics(
+    *,
+    optimization_direction: Literal["minimize", "maximize"],
+    selected_evaluation_metrics: Mapping[str, list[str]],
+) -> None:
+  """Verifies if the specified optimization direction is compatible.
+
+  Args:
+    optimization_direction: Optimization direction of evaluation metrics. One of
+      'minimize' or 'maximize'.
+    selected_evaluation_metrics: A mapping between 'selected' evaluation
+      categories and sequences of their respective evaluation metric names.
+
+  Raises:
+      ValueError: An error if the specified optimization direction is not
+      compatible or either category or evaluation metric are not recognized.
+  """
+  if optimization_direction not in _AVAILABLE_OPTIMIZATION_DIRECTIONS:
+    raise ValueError(
+        f"{optimization_direction!r} not compatible. Choose one from:"
+        f" {', '.join(_AVAILABLE_OPTIMIZATION_DIRECTIONS)}"
+    )
+
+  if optimization_direction == _MINIMIZE:
+    verify_evaluation_metrics(
+        selected_evaluation_metrics=selected_evaluation_metrics,
+        reference_evaluation_metrics=_MINIMIZE_EVALUATION_METRICS,
+    )
+  else:
+    verify_evaluation_metrics(
+        selected_evaluation_metrics=selected_evaluation_metrics,
+        reference_evaluation_metrics=_MAXIMIZE_EVALUATION_METRICS,
+    )
+
+
+def verify_experiment_directory(
+    *, experiment_directory: pathlib.Path | None
+) -> pathlib.Path:
+  """Returns an experiment directory where all artifacts will be saved.
+
+  Args:
+    experiment_directory: A path to a directory where all artifacts should be
+      saved.
+  """
+  if not experiment_directory:
+    creation_time = datetime.datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
+    experiment_directory = pathlib.Path.cwd().joinpath(creation_time)
+  if not experiment_directory.exists():
+    experiment_directory.mkdir()
+  return experiment_directory
+
+
+def generate_synthetic_data_with_synthetic_data_model(
+    *,
+    count: int,
+    model: pathlib.Path | _BaseModelType,
+    random_state: int | None = 0,
+    generate_kwargs: Mapping[str, Any] | None = None,
+) -> pd.DataFrame:
+  """Returns a dataframe with synthetic data.
+
+  Args:
+    count: A number of observations to create.
+    model: The path to the best synthetic data model or its instance.
+    random_state: A random state to ensure results repeatability.
+      self.best_synthetic_data_model will be used.
+    evaluate_kwargs: A mapping of keywords arguments for the 'synthcity'
+      Plugin.generate method and their values.
+  """
+  if isinstance(model, pathlib.Path):
+    model = utils.serialization.load_from_file(model)
+  if generate_kwargs:
+    return model.generate(
+        count=count, random_state=random_state, **generate_kwargs
+    )
+  return model.generate(count=count, random_state=random_state).dataframe()
