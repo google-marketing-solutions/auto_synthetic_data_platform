@@ -589,3 +589,66 @@ class SyntheticDataModelTuner:
         repeats=1,
         workspace=self.experiment_directory,
     )["evaluation"]
+
+  @functools.cached_property
+  def best_synthetic_data_model_evaluation_report(
+      self,
+  ) -> pd.DataFrame:
+    """Returns a dataframe with only 'evaluation_metrics' results of the best model."""
+    full_evaluation_report = self.best_synthetic_data_model_full_evaluation_report
+    relevant_evaluation_row_names_mapping = {
+        evaluation_category: list_relevant_evaluation_row_names(
+            evaluation_category=evaluation_category,
+            evaluation_metrics=evaluation_metrics,
+        )
+        for evaluation_category, evaluation_metrics in self.evaluation_metrics.items()
+    }
+    relevant_evaluation_row_names = [
+        sublist
+        for sublists in relevant_evaluation_row_names_mapping.values()
+        for sublist in sublists
+    ]
+    return full_evaluation_report[
+        full_evaluation_report.index.str.startswith(
+            tuple(relevant_evaluation_row_names)
+        )
+    ]
+
+  def save_best_synthetic_data_model(
+      self, *, model_path: pathlib.Path | None = None
+  ) -> None:
+    """Saves the best synthetic data model to a file."""
+    if not model_path:
+      creation_time = datetime.datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
+      model_name = self.synthetic_data_model.name() + creation_time + ".pkl"
+      model_path = self.experiment_directory.joinpath(
+          "synthetic_data_models"
+      ).joinpath(model_name)
+    if not model_path.parent.exists():
+      model_path.parent.mkdir()
+    utils.serialization.save_to_file(
+        str(model_path), self.best_synthetic_data_model
+    )
+
+  def generate_synthetic_data_with_the_best_synthetic_data_model(
+      self,
+      *,
+      count: int,
+      random_state: int | None = 0,
+      generate_kwargs: Mapping[str, Any] | None = None,
+  ) -> pd.DataFrame:
+    """Returns a dataframe with synthetic data.
+
+    Args:
+      count: A number of observations to create.
+      random_state: A random state to ensure results repeatability.
+        self.best_synthetic_data_model will be used.
+      evaluate_kwargs: A mapping of keywords arguments for the 'synthcity'
+        Plugin.generate method and their values.
+    """
+    return generate_synthetic_data_with_synthetic_data_model(
+        count=count,
+        model=self.best_synthetic_data_model,
+        random_state=random_state,
+        generate_kwargs=generate_kwargs,
+    )

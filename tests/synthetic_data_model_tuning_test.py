@@ -3,6 +3,7 @@ import logging
 import pathlib
 import tempfile
 from typing import Final
+from absl.testing import absltest
 from absl.testing import parameterized
 from auto_synthetic_data_platform import synthetic_data_model_tuning
 import optuna
@@ -378,3 +379,98 @@ class SyntheticDataModelTunerTests(parameterized.TestCase):
           ].loc["sanity.data_mismatch.score"]
       )
       self.assertEqual(actual_result, 0.0)
+
+  def test_synthetic_data_model_tuner_best_synthetic_data_model_evaluation_report(
+      self,
+  ):
+    with tempfile.TemporaryDirectory() as temporary_directory:
+      experiment_directory = pathlib.Path(temporary_directory)
+      model = plugins.Plugins().get(
+          "dummy_sampler", workspace=experiment_directory
+      )
+      tuner = synthetic_data_model_tuning.SyntheticDataModelTuner(
+          data_loader=_DATA_LOADER,
+          synthetic_data_model=model,
+          task_type="classification",
+          number_of_trials=_NUMBER_OF_TRIALS,
+          optimization_direction=_OPTIMIZATION_DIRECTION,
+          evaluation_metrics=_EVALUATION_METRICS,
+          experiment_directory=experiment_directory,
+      )
+      actual_result = (
+          tuner.best_synthetic_data_model_evaluation_report[
+              "mean"
+          ].loc["sanity.common_rows_proportion.score"]
+      )
+      self.assertEqual(actual_result, 0.9999999900000002)
+
+  def test_synthetic_data_model_tuner_save_best_synthetic_data_model(self):
+    with tempfile.TemporaryDirectory() as temporary_directory:
+      experiment_directory = pathlib.Path(temporary_directory)
+      model = plugins.Plugins().get(
+          "dummy_sampler", workspace=experiment_directory
+      )
+      tuner = synthetic_data_model_tuning.SyntheticDataModelTuner(
+          data_loader=_DATA_LOADER,
+          synthetic_data_model=model,
+          task_type="classification",
+          number_of_trials=_NUMBER_OF_TRIALS,
+          optimization_direction=_OPTIMIZATION_DIRECTION,
+          evaluation_metrics=_EVALUATION_METRICS,
+          experiment_directory=experiment_directory,
+      )
+      tuner.save_best_synthetic_data_model()
+      files_in_experiment_directory = list(experiment_directory.rglob("*"))
+      self.assertTrue(
+          any(
+              file_name.suffix == ".pkl"
+              for file_name in files_in_experiment_directory
+          )
+      )
+
+  def test_synthetic_data_model_tuner_save_best_synthetic_data_model_from_path(
+      self,
+  ):
+    with tempfile.TemporaryDirectory() as temporary_directory:
+      experiment_directory = pathlib.Path(temporary_directory)
+      model = plugins.Plugins().get(
+          "dummy_sampler", workspace=experiment_directory
+      )
+      tuner = synthetic_data_model_tuning.SyntheticDataModelTuner(
+          data_loader=_DATA_LOADER,
+          synthetic_data_model=model,
+          task_type="classification",
+          number_of_trials=_NUMBER_OF_TRIALS,
+          optimization_direction=_OPTIMIZATION_DIRECTION,
+          evaluation_metrics=_EVALUATION_METRICS,
+          experiment_directory=experiment_directory,
+      )
+      model_path = pathlib.Path(temporary_directory).joinpath("test_model.pkl")
+      tuner.save_best_synthetic_data_model(model_path=model_path)
+      self.assertTrue(model_path.exists())
+
+  def test_generate_synthetic_data_with_the_best_synthetic_data_model(
+      self,
+  ):
+    with tempfile.TemporaryDirectory() as temporary_directory:
+      experiment_directory = pathlib.Path(temporary_directory)
+      model = plugins.Plugins().get(
+          "dummy_sampler", workspace=experiment_directory
+      )
+      tuner = synthetic_data_model_tuning.SyntheticDataModelTuner(
+          data_loader=_DATA_LOADER,
+          synthetic_data_model=model,
+          task_type="classification",
+          number_of_trials=_NUMBER_OF_TRIALS,
+          optimization_direction=_OPTIMIZATION_DIRECTION,
+          evaluation_metrics=_EVALUATION_METRICS,
+          experiment_directory=experiment_directory,
+      )
+      actual_output = tuner.generate_synthetic_data_with_the_best_synthetic_data_model(
+          count=_COUNT,
+      )
+      self.assertEqual(actual_output["categorical_column"].loc[0], 4)
+
+
+if __name__ == "__main__":
+  absltest.main()
