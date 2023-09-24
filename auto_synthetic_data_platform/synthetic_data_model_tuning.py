@@ -1,7 +1,9 @@
 import datetime
+import functools
 import pathlib
 from typing import Any, Final, Literal, Mapping, Sequence, TypeVar
 import pandas as pd
+from pandas.io.formats import style
 from synthcity import plugins
 from synthcity import utils
 from synthcity.plugins.core import dataloader
@@ -285,3 +287,62 @@ def verify_indexes(
         f"Not all evaluation results have identicial indexes (evaluation"
         f" tests)."
     )
+
+
+def setup_highlights(
+    row: pd.Series, *, row_directions: Mapping[str, str]
+) -> Sequence[str]:
+  """Returns a sequence of dataframe formating rules for a given row.
+
+  Args:
+    row: A series with evaluation results.
+    row_direction: A mapping between all evaluation test names and the direction
+      in which they should be optimized.
+  """
+  if row_directions.get(row.name) == _MINIMIZE:
+    best_evaluation_score = row.min()
+    worst_evaluation_score = row.max()
+  else:
+    best_evaluation_score = row.max()
+    worst_evaluation_score = row.min()
+  styles = []
+  for evaluation_score in row.values:
+    if evaluation_score == best_evaluation_score:
+      styles.append(_BEST_EVALUATION_SCORE_HIGHLIGHT)
+    elif evaluation_score == worst_evaluation_score:
+      styles.append(_WORST_EVALUATION_SCORE_HIGHLIGHT)
+    else:
+      styles.append(_DEFAULT_EVALUATION_SCORE_HIGHLIGHT)
+  return styles
+
+
+def compare_synthetic_data_models_full_evaluation_reports(
+    *,
+    evaluation_results_mapping: Sequence[Mapping[str, pd.DataFrame]],
+) -> style.Styler:
+  """Returns a styled dataframe with highlighted best and worst results.
+
+  Args:
+    evaluation_results_mapping:  A mapping between model names and respective
+      full evalaution reports.
+
+  Raises:
+    ValueError: An error if an evaluation results doesn't contain both
+    "mean" and "direction" columns. Or if any of the evaluation has results indexes
+    different than the rest.
+  """
+  verify_column_names(evaluation_results_mapping=evaluation_results_mapping)
+  verify_indexes(evaluation_results_mapping=evaluation_results_mapping)
+  evaluation_mean_scores = [
+      scores["mean"] for scores in evaluation_results_mapping.values()
+  ]
+  directions = evaluation_results_mapping[
+      next(iter(evaluation_results_mapping))
+  ]["direction"].to_dict()
+  output_dataframe = pd.concat(evaluation_mean_scores, axis=1)
+  output_dataframe.set_axis(
+      evaluation_results_mapping.keys(), axis=1, inplace=True
+  )
+  return output_dataframe.style.apply(
+      functools.partial(setup_highlights, row_directions=directions), axis=1
+  )

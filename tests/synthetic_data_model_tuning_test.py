@@ -188,3 +188,31 @@ class SyntheticDataModelTuningTests(parameterized.TestCase):
       synthetic_data_model_tuning.verify_indexes(
           evaluation_results_mapping=evaluation_results_mapping,
       )
+
+  @parameterized.named_parameters(
+      dict(
+          testcase_name="minimize",
+          row_directions={0: "minimize"},
+          row=pd.DataFrame([[0, 1, 2]]).iloc[0],
+          expected_output=[
+              "background-color: green;",
+              "",
+              "background-color: red;",
+          ],
+      ),
+      dict(
+          testcase_name="maximize",
+          row_directions={0: "maximize"},
+          row=pd.DataFrame([[0, 1, 2]]).iloc[0],
+          expected_output=[
+              "background-color: red;",
+              "",
+              "background-color: green;",
+          ],
+      ),
+  )
+  def test_setup_highlights(self, row, row_directions, expected_output):
+    actual_output = synthetic_data_model_tuning.setup_highlights(
+        row=row, row_directions=row_directions
+    )
+    self.assertEqual(actual_output, expected_output)
