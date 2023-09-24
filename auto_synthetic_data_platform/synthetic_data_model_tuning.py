@@ -4,11 +4,16 @@ import logging
 import pathlib
 from typing import Any, Final, Literal, Mapping, Sequence, TypeVar
 from auto_synthetic_data_platform import experiment_logging
+import optuna
+from optuna import study
+from optuna import visualization
 import pandas as pd
 from pandas.io.formats import style
+from synthcity import benchmark
 from synthcity import plugins
 from synthcity import utils
 from synthcity.plugins.core import dataloader
+from synthcity.utils import optuna_sample
 
 _MINIMIZE: Final[str] = "minimize"
 _MAXIMIZE: Final[str] = "maximize"
@@ -453,3 +458,77 @@ class SyntheticDataModelTuner:
         experiment_directory=self.experiment_directory,
         logger_name="hyperparameter_optimization",
     )
+
+  def optimization_function(
+      self,
+      trial: optuna.Trial,
+  ) -> float:
+    """Defines a synthetic data model hyperprameter optimization process.
+
+    Args:
+      trial: The 'optuna' trial process of evaluating an objective function.
+
+    Returns:
+      A mean evaluation metric score.
+    """
+    trial_id = f"trial_{trial.number}"
+    hyperparameter_space = self.synthetic_data_model.hyperparameter_space()
+    trial_parameters = optuna_sample.suggest_all(trial, hyperparameter_space)
+    self.logger.info(
+        "Trial: %s. Model: %s. Selected hyperparameters: %s"
+        % (
+            trial_id,
+            self.synthetic_data_model.name(),
+            trial_parameters,
+        )
+    )
+    try:
+      if self.evaluate_kwargs:
+        report = benchmark.Benchmarks.evaluate(
+            [(trial_id, self.synthetic_data_model.name(), trial_parameters)],
+            self.train_data_loader,
+            task_type=self.task_type,
+            repeats=1,
+            metrics=self.evaluation_metrics,
+            workspace=self.experiment_directory,
+            **self.evaluate_kwargs,
+        )
+      else:
+        report = benchmark.Benchmarks.evaluate(
+            [(trial_id, self.synthetic_data_model.name(), trial_parameters)],
+            self.train_data_loader,
+            task_type=self.task_type,
+            repeats=1,
+            metrics=self.evaluation_metrics,
+            workspace=self.experiment_directory,
+        )
+    except Exception as e:
+      self.logger.info(
+          "Trial: %s. Error: %s"
+          % (
+              trial_id,
+              type(e).__name__,
+          )
+      )
+      raise optuna.TrialPruned()
+    return (
+        report[trial_id]
+        .query(f'direction == "{self.optimization_direction}"')["mean"]
+        .mean()
+    )
+
+  @functools.cached_property
+  def study(self) -> study.Study:
+    """Returns the 'optuna' study after hyperparameter optimization."""
+    self.logger.info(
+        "Specified 'evaluation_metrics': %s. Optimization direction: '%s'."
+        % (self.evaluation_metrics, self.optimization_direction)
+    )
+    study = optuna.create_study(direction=self.optimization_direction)
+    study.optimize(self.optimization_function, n_trials=self.number_of_trials)
+    return study
+
+  @functools.cached_property
+  def best_hyperparameters(self) -> Mapping[str, Any]:
+    """Returns a set of optimized hyperparameters."""
+    return self.study.best_params

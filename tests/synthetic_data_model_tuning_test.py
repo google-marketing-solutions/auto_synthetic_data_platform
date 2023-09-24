@@ -5,6 +5,7 @@ import tempfile
 from typing import Final
 from absl.testing import parameterized
 from auto_synthetic_data_platform import synthetic_data_model_tuning
+import optuna
 import pandas as pd
 from synthcity import plugins
 from synthcity.plugins.core import dataloader
@@ -237,3 +238,98 @@ class SyntheticDataModelTunerTests(parameterized.TestCase):
           experiment_directory=experiment_directory,
       )
       self.assertIsInstance(tuner.logger, logging.Logger)
+
+  def test_synthetic_data_model_tuner_optimization_function_without_evaluate_kwargs(
+      self,
+  ):
+    with tempfile.TemporaryDirectory() as temporary_directory:
+      experiment_directory = pathlib.Path(temporary_directory)
+      model = plugins.Plugins().get(
+          "dummy_sampler", workspace=experiment_directory
+      )
+      tuner = synthetic_data_model_tuning.SyntheticDataModelTuner(
+          data_loader=_DATA_LOADER,
+          synthetic_data_model=model,
+          task_type="classification",
+          number_of_trials=_NUMBER_OF_TRIALS,
+          optimization_direction=_OPTIMIZATION_DIRECTION,
+          evaluation_metrics=_EVALUATION_METRICS,
+          experiment_directory=experiment_directory,
+      )
+      trial = optuna.trial.create_trial(state=optuna.trial.TrialState.WAITING)
+      self.assertEqual(tuner.optimization_function(trial), 0.9999999900000002)
+
+  def test_synthetic_data_model_tuner_optimization_function_with_evaluate_kwargs(
+      self,
+  ):
+    with tempfile.TemporaryDirectory() as temporary_directory:
+      experiment_directory = pathlib.Path(temporary_directory)
+      model = plugins.Plugins().get(
+          "dummy_sampler", workspace=experiment_directory
+      )
+      tuner = synthetic_data_model_tuning.SyntheticDataModelTuner(
+          data_loader=_DATA_LOADER,
+          synthetic_data_model=model,
+          task_type="classification",
+          number_of_trials=_NUMBER_OF_TRIALS,
+          optimization_direction=_OPTIMIZATION_DIRECTION,
+          evaluation_metrics=_EVALUATION_METRICS,
+          experiment_directory=experiment_directory,
+          evaluate_kwargs=dict(augmentation_rule="log"),
+      )
+      trial = optuna.trial.create_trial(state=optuna.trial.TrialState.WAITING)
+      self.assertEqual(tuner.optimization_function(trial), 0.9999999900000002)
+
+  def test_synthetic_data_model_tuner_optimization_function_exception(self):
+    with tempfile.TemporaryDirectory() as temporary_directory:
+      experiment_directory = pathlib.Path(temporary_directory)
+      model = plugins.Plugins().get(
+          "dummy_sampler", workspace=experiment_directory
+      )
+      tuner = synthetic_data_model_tuning.SyntheticDataModelTuner(
+          data_loader=_DATA_LOADER,
+          synthetic_data_model=model,
+          task_type="classification",
+          number_of_trials=_NUMBER_OF_TRIALS,
+          optimization_direction=_OPTIMIZATION_DIRECTION,
+          evaluation_metrics=_EVALUATION_METRICS,
+          experiment_directory=experiment_directory,
+          evaluate_kwargs=dict(task_type=1),
+      )
+      trial = optuna.trial.create_trial(state=optuna.trial.TrialState.WAITING)
+      with self.assertRaises(optuna.exceptions.TrialPruned):
+        tuner.optimization_function(trial)
+
+  def test_synthetic_data_model_tuner_study(self):
+    with tempfile.TemporaryDirectory() as temporary_directory:
+      experiment_directory = pathlib.Path(temporary_directory)
+      model = plugins.Plugins().get(
+          "dummy_sampler", workspace=experiment_directory
+      )
+      tuner = synthetic_data_model_tuning.SyntheticDataModelTuner(
+          data_loader=_DATA_LOADER,
+          synthetic_data_model=model,
+          task_type="classification",
+          number_of_trials=_NUMBER_OF_TRIALS,
+          optimization_direction=_OPTIMIZATION_DIRECTION,
+          evaluation_metrics=_EVALUATION_METRICS,
+          experiment_directory=experiment_directory,
+      )
+      self.assertAlmostEqual(tuner.study.best_value, 0.9999999900000002)
+
+  def test_synthetic_data_model_tuner_best_hyperparameters(self):
+    with tempfile.TemporaryDirectory() as temporary_directory:
+      experiment_directory = pathlib.Path(temporary_directory)
+      model = plugins.Plugins().get(
+          "dummy_sampler", workspace=experiment_directory
+      )
+      tuner = synthetic_data_model_tuning.SyntheticDataModelTuner(
+          data_loader=_DATA_LOADER,
+          synthetic_data_model=model,
+          task_type="classification",
+          number_of_trials=_NUMBER_OF_TRIALS,
+          optimization_direction=_OPTIMIZATION_DIRECTION,
+          evaluation_metrics=_EVALUATION_METRICS,
+          experiment_directory=experiment_directory,
+      )
+      self.assertEqual(tuner.best_hyperparameters, {})
