@@ -1,4 +1,5 @@
 """Tests for utility functions in synthetic_data_model_tuning.py."""
+import logging
 import pathlib
 import tempfile
 from typing import Final
@@ -216,3 +217,23 @@ class SyntheticDataModelTuningTests(parameterized.TestCase):
         row=row, row_directions=row_directions
     )
     self.assertEqual(actual_output, expected_output)
+
+
+class SyntheticDataModelTunerTests(parameterized.TestCase):
+
+  def test_synthetic_data_model_tuner_logger(self):
+    with tempfile.TemporaryDirectory() as temporary_directory:
+      experiment_directory = pathlib.Path(temporary_directory)
+      model = plugins.Plugins().get(
+          "dummy_sampler", workspace=experiment_directory
+      )
+      tuner = synthetic_data_model_tuning.SyntheticDataModelTuner(
+          data_loader=_DATA_LOADER,
+          synthetic_data_model=model,
+          task_type="classification",
+          number_of_trials=_NUMBER_OF_TRIALS,
+          optimization_direction=_OPTIMIZATION_DIRECTION,
+          evaluation_metrics=_EVALUATION_METRICS,
+          experiment_directory=experiment_directory,
+      )
+      self.assertIsInstance(tuner.logger, logging.Logger)

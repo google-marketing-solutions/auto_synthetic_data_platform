@@ -1,7 +1,9 @@
 import datetime
 import functools
+import logging
 import pathlib
 from typing import Any, Final, Literal, Mapping, Sequence, TypeVar
+from auto_synthetic_data_platform import experiment_logging
 import pandas as pd
 from pandas.io.formats import style
 from synthcity import plugins
@@ -346,3 +348,108 @@ def compare_synthetic_data_models_full_evaluation_reports(
   return output_dataframe.style.apply(
       functools.partial(setup_highlights, row_directions=directions), axis=1
   )
+
+
+class SyntheticDataModelTuner:
+  """Trains a synthetic data model using the most optimal hyperparameters.
+
+  Attributes:
+    train_data_loader: A 'synthcity' data loader initialized with a dataframe
+      containing real preprocessed train data.
+    test_data_loader: A 'synthcity' data loader initialized with a dataframe
+      containing real preprocessed test data.
+    synthetic_data_model: A 'synthcity' synthetic data model to optimize.
+    task_type: A task type compatible with the 'synthcity' library. Used for
+      model evaluation.
+    experiment_directory: A path to the experiment directory where all the
+      experiment artifacts will be saved.
+    number_of_trials: A number of hyperoptimization trials to run.
+    optimization_direction: Optimization direction of evaluation metrics. One of
+      'minimize' or 'maximize'.
+    evaluation_metrics: A sequence of metrics to test.
+    evaluate_kwargs: A mapping of keywords arguments for the 'synthcity'
+      Benchmarks.evaluate method and their values.
+    logger: A logger object to log and save hyperparameter optimization
+      messages.
+    study: An 'optuna' hyperarameter optimization study.
+    best_hyperparameters: A mapping of the most optimal hyperparameter names and
+      their values.
+    best_synthetic_data_model: An optimized 'synthcity' synthetic data model.
+    best_synthetic_data_model_full_evaluation_report: A dataframe with all available
+      evaluation results of the best model.
+    best_synthetic_data_model_evaluation_report: A dataframe with only
+      'evaluation_metrics' results of the best model.
+  """
+
+  def __init__(
+      self,
+      *,
+      data_loader: _BaseLoaderType,
+      synthetic_data_model: _BaseModelType,
+      task_type: Literal[
+          "classification",
+          "regression",
+          "survival_analysis",
+          "time_series",
+          "time_series_survival",
+      ],
+      number_of_trials: int,
+      optimization_direction: Literal["minimize", "maximize"],
+      evaluation_metrics: Mapping[str, list[str]],
+      experiment_directory: pathlib.Path | None = None,
+      evaluate_kwargs: Mapping[str, Any] | None = None,
+  ) -> None:
+    """Initializes the SyntheticDataModelOptimizer class.
+
+    Args:
+      data_loader: A 'synthcity' data loader initialized with a dataframe
+        containing all of the real preprocessed data.
+      synthetic_data_model: A 'synthcity' synthetic data model.
+      task_type: A task type compatible with the 'synthcity' library. Used for
+        model evaluation.
+      number_of_trials: A number of hyperoptimization trials to run.
+      optimization_direction: Optimization direction of evaluation metrics. One
+        of 'minimize' or 'maximize'.
+      evaluation_metrics: List of metrics to test. If None, all metrics are
+        evaluated. Full dictionary of metrics is: { 'sanity': ['data_mismatch',
+        'common_rows_proportion', 'nearest_syn_neighbor_distance',
+        'close_values_probability', 'distant_values_probability'],
+        'stats':['jensenshannon_dist', 'chi_squared_test', 'feature_corr',
+        'inv_kl_divergence', 'ks_test', 'max_mean_discrepancy',
+        'wasserstein_dist', 'prdc', 'alpha_precision', 'survival_km_distance'],
+        'performance': ['linear_model', 'mlp', 'xgb', 'feat_rank_distance'],
+        'detection': ['detection_xgb', 'detection_mlp', 'detection_gmm',
+        'detection_linear'], 'privacy': ['delta-presence', 'k-anonymization',
+        'k-map', 'distinct l-diversity', 'identifiability_score',
+        'DomiasMIA_BNAF', 'DomiasMIA_KDE', 'DomiasMIA_prior'] }
+      experiment_directory: A path to the experiment directory where all the
+        experiment artifacts will be saved.
+      evaluate_kwargs: A mapping of keywords arguments for the 'synthcity'
+        Benchmarks.evaluate method and their values.
+    """
+    (
+        self.train_data_loader,
+        self.test_data_loader,
+    ) = split_data_loader_into_train_test(data_loader=data_loader)
+    self.synthetic_data_model = synthetic_data_model
+    self.task_type = verify_task_type(task_type=task_type)
+    self.number_of_trials = number_of_trials
+    self.optimization_direction = optimization_direction
+    self.evaluation_metrics = evaluation_metrics
+    self.experiment_directory = verify_experiment_directory(
+        experiment_directory=experiment_directory
+    )
+    self.evaluate_kwargs = evaluate_kwargs
+
+    verify_optimization_direction_and_evaluation_metrics(
+        optimization_direction=self.optimization_direction,
+        selected_evaluation_metrics=self.evaluation_metrics,
+    )
+
+  @functools.cached_property
+  def logger(self) -> logging.Logger:
+    """Returns an object for logging hyperparameter optimization messages."""
+    return experiment_logging.setup_logger(
+        experiment_directory=self.experiment_directory,
+        logger_name="hyperparameter_optimization",
+    )
