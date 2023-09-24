@@ -9,6 +9,7 @@ import optuna
 import pandas as pd
 from synthcity import plugins
 from synthcity.plugins.core import dataloader
+from synthcity.plugins.generic import plugin_dummy_sampler
 
 _DATAFRAME = pd.DataFrame.from_dict({
     "categorical_column": [0, 1, 3, 4, 5, 6],
@@ -333,3 +334,47 @@ class SyntheticDataModelTunerTests(parameterized.TestCase):
           experiment_directory=experiment_directory,
       )
       self.assertEqual(tuner.best_hyperparameters, {})
+
+  def test_synthetic_data_model_tuner_best_synthetic_data_model(self):
+    with tempfile.TemporaryDirectory() as temporary_directory:
+      experiment_directory = pathlib.Path(temporary_directory)
+      model = plugins.Plugins().get(
+          "dummy_sampler", workspace=experiment_directory
+      )
+      tuner = synthetic_data_model_tuning.SyntheticDataModelTuner(
+          data_loader=_DATA_LOADER,
+          synthetic_data_model=model,
+          task_type="classification",
+          number_of_trials=_NUMBER_OF_TRIALS,
+          optimization_direction=_OPTIMIZATION_DIRECTION,
+          evaluation_metrics=_EVALUATION_METRICS,
+          experiment_directory=experiment_directory,
+      )
+      self.assertIsInstance(
+          tuner.best_synthetic_data_model,
+          plugin_dummy_sampler.DummySamplerPlugin,
+      )
+
+  def test_synthetic_data_model_tuner_best_synthetic_data_model_full_evaluation_report(
+      self,
+  ):
+    with tempfile.TemporaryDirectory() as temporary_directory:
+      experiment_directory = pathlib.Path(temporary_directory)
+      model = plugins.Plugins().get(
+          "dummy_sampler", workspace=experiment_directory
+      )
+      tuner = synthetic_data_model_tuning.SyntheticDataModelTuner(
+          data_loader=_DATA_LOADER,
+          synthetic_data_model=model,
+          task_type="classification",
+          number_of_trials=_NUMBER_OF_TRIALS,
+          optimization_direction=_OPTIMIZATION_DIRECTION,
+          evaluation_metrics=_EVALUATION_METRICS,
+          experiment_directory=experiment_directory,
+      )
+      actual_result = (
+          tuner.best_synthetic_data_model_full_evaluation_report[
+              "mean"
+          ].loc["sanity.data_mismatch.score"]
+      )
+      self.assertEqual(actual_result, 0.0)

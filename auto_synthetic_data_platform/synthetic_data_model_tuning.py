@@ -532,3 +532,60 @@ class SyntheticDataModelTuner:
   def best_hyperparameters(self) -> Mapping[str, Any]:
     """Returns a set of optimized hyperparameters."""
     return self.study.best_params
+
+  def display_parallel_hyperparameter_coordinates(self):
+    """Displays a plot of hyperparameter parallel coordinates."""
+    return visualization.plot_parallel_coordinate(self.study)
+
+  def display_hyperparameter_importances(self):
+    """Displays a plot of hyperparameter parallel coordinates."""
+    return visualization.plot_param_importances(self.study)
+
+  @functools.cached_property
+  def best_synthetic_data_model(self) -> _BaseModelType:
+    """Returns a synthetic data model trained using the best hyperparameters."""
+    self.logger.info(
+        "Model: %s. Best hyperparameters: %s"
+        % (
+            self.synthetic_data_model.name(),
+            self.best_hyperparameters,
+        )
+    )
+    best_synthetic_data_model = plugins.Plugins().get(
+        self.synthetic_data_model.name(),
+        **self.best_hyperparameters,
+        workspace=self.experiment_directory,
+    )
+    return best_synthetic_data_model.fit(self.train_data_loader)
+
+  @functools.cached_property
+  def best_synthetic_data_model_full_evaluation_report(
+      self,
+  ) -> pd.DataFrame:
+    """Returns a dataframe with all available evaluation results of the best model."""
+    if self.evaluate_kwargs:
+      return benchmark.Benchmarks.evaluate(
+          [(
+              "evaluation",
+              self.synthetic_data_model.name(),
+              self.best_hyperparameters,
+          )],
+          self.train_data_loader,
+          self.test_data_loader,
+          task_type=self.task_type,
+          repeats=1,
+          workspace=self.experiment_directory,
+          **self.evaluate_kwargs,
+      )
+    return benchmark.Benchmarks.evaluate(
+        [(
+            "evaluation",
+            self.synthetic_data_model.name(),
+            self.best_hyperparameters,
+        )],
+        self.train_data_loader,
+        self.test_data_loader,
+        task_type=self.task_type,
+        repeats=1,
+        workspace=self.experiment_directory,
+    )["evaluation"]
