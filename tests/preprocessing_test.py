@@ -112,12 +112,24 @@ class PreprocessingTests(absltest.TestCase):
 
 class PreprocessorTests(absltest.TestCase):
 
-  def test_preprocessor_input_dataframe(self):
+  def test_preprocessor_input_dataframe_from_file(self):
     with tempfile.TemporaryDirectory() as temporary_directory:
       dataframe_path = pathlib.Path(temporary_directory).joinpath("test.csv")
       _DATAFRAME.to_csv(dataframe_path, index=False)
       preprocessor = preprocessing.Preprocessor(
           dataframe_path=pathlib.Path(dataframe_path),
+          experiment_directory=temporary_directory,
+          column_metadata={
+              "categorical": ["categorical_column"],
+              "numerical": ["numerical_column"],
+          },
+      )
+      pd.testing.assert_frame_equal(preprocessor.input_dataframe, _DATAFRAME)
+
+  def test_preprocessor_input_dataframe(self):
+    with tempfile.TemporaryDirectory() as temporary_directory:
+      preprocessor = preprocessing.Preprocessor(
+          dataframe_path=_DATAFRAME,
           experiment_directory=temporary_directory,
           column_metadata={
               "categorical": ["categorical_column"],

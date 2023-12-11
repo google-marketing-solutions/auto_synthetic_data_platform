@@ -109,7 +109,7 @@ class Preprocessor:
   def __init__(
       self,
       *,
-      dataframe_path: pathlib.Path,
+      dataframe: pathlib.Path | pd.DataFrame,
       experiment_directory: pathlib.Path,
       column_metadata: Mapping[str, list[Any]],
       preprocess_metadata: Mapping[str, Any] | None = None,
@@ -117,7 +117,7 @@ class Preprocessor:
     """Initializes the Preprocessor class.
 
     Args:
-      dataframe_path: A path to the dataframe with the real data. The package
+      dataframe: A path to the dataframe with the real data or a datframe with real data. The package
         will use it to train a synthetic data model and then to generate a fake
         version of this dataframe.
       experiment_directory: A path to the experiment directory where all the
@@ -128,7 +128,7 @@ class Preprocessor:
         variable names and their values used to preprocess the input dataframe
         with the real data before training any synthetic data models.
     """
-    self.dataframe_path = dataframe_path
+    self.dataframe = dataframe
     self.experiment_directory = experiment_directory
     self.column_metadata = column_metadata
     self.preprocess_metadata = preprocess_metadata
@@ -136,6 +136,8 @@ class Preprocessor:
   @functools.cached_property
   def input_dataframe(self) -> pd.DataFrame:
     """Returns the input dataframe with the real data."""
+    if isinstance(self.dataframe, pd.DataFrame):
+      return self.dataframe
     return pd.read_csv(self.dataframe_path)
 
   @functools.cached_property
