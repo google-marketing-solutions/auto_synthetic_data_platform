@@ -20,6 +20,7 @@ from typing import Final
 from absl.testing import absltest
 from absl.testing import parameterized
 from auto_synthetic_data_platform import synthetic_data_model_tuning
+from auto_synthetic_data_platform import custom_constraints
 import optuna
 import pandas as pd
 from synthcity import plugins
@@ -237,6 +238,10 @@ class SyntheticDataModelTuningTests(parameterized.TestCase):
 
 
 class SyntheticDataModelTunerTests(parameterized.TestCase):
+
+  def _is_valid_element(self, synth_test_df:pd.DataFrame) -> pd.Series:
+    #assume element is valid if it contains a value == 4 in categorical column.
+    return synth_test_df["categorical_column"]==4
 
   def test_synthetic_data_model_tuner_logger(self):
     with tempfile.TemporaryDirectory() as temporary_directory:
@@ -485,6 +490,33 @@ class SyntheticDataModelTunerTests(parameterized.TestCase):
       )
       self.assertEqual(actual_output["categorical_column"].loc[0], 4)
 
+  def test_generate_synthetic_data_with_the_best_synthetic_data_model_with_custom_constraints(
+    self,
+  ):
+    with tempfile.TemporaryDirectory() as temporary_directory:
+      experiment_directory = pathlib.Path(temporary_directory)
+      model = plugins.Plugins().get(
+          "dummy_sampler", workspace=experiment_directory
+      )
+      tuner = synthetic_data_model_tuning.SyntheticDataModelTuner(
+          data_loader=_DATA_LOADER,
+          synthetic_data_model=model,
+          task_type="classification",
+          number_of_trials=_NUMBER_OF_TRIALS,
+          optimization_direction=_OPTIMIZATION_DIRECTION,
+          evaluation_metrics=_EVALUATION_METRICS,
+          experiment_directory=experiment_directory,
+      )
+
+      custom_constraint = custom_constraints.CustomConstraints(
+          self._is_valid_element, custom_sampling_patience=2, count=2
+      )
+      actual_output = (
+          tuner.generate_synthetic_data_with_the_best_synthetic_data_model(
+              count=_COUNT, custom_constraint=custom_constraint
+          )
+      )
+      self.assertTrue(list(actual_output["categorical_column"]).count(4) >= 2)
 
 if __name__ == "__main__":
   absltest.main()

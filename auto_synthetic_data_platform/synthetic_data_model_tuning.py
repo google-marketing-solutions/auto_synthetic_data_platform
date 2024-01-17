@@ -19,6 +19,7 @@ import logging
 import pathlib
 from typing import Any, Final, Literal, Mapping, Sequence, TypeVar
 from auto_synthetic_data_platform import experiment_logging
+from auto_synthetic_data_platform import custom_constraints
 import optuna
 from optuna import study
 from optuna import visualization
@@ -246,7 +247,7 @@ def generate_synthetic_data_with_synthetic_data_model(
   if generate_kwargs:
     return model.generate(
         count=count, random_state=random_state, **generate_kwargs
-    )
+    ).dataframe()
   return model.generate(count=count, random_state=random_state).dataframe()
 
 
@@ -650,20 +651,55 @@ class SyntheticDataModelTuner:
       *,
       count: int,
       random_state: int | None = 0,
+      custom_constraint: custom_constraints.CustomConstraints | None = None,
       generate_kwargs: Mapping[str, Any] | None = None,
   ) -> pd.DataFrame:
     """Returns a dataframe with synthetic data.
 
     Args:
+      custom_constraint: Additional constraints of type CustomConstraints not
+        covered within regular 'synthcity constraints' spec.
       count: A number of observations to create.
       random_state: A random state to ensure results repeatability.
         self.best_synthetic_data_model will be used.
       evaluate_kwargs: A mapping of keywords arguments for the 'synthcity'
         Plugin.generate method and their values.
     """
-    return generate_synthetic_data_with_synthetic_data_model(
+    custom_constrained_synth_data = pd.DataFrame()
+
+    # generate custom constrained synthetic data
+    if custom_constraint:
+      for it in range(custom_constraint.custom_sampling_patience):
+        synth_data = generate_synthetic_data_with_synthetic_data_model(
+            count=count,
+            model=self.best_synthetic_data_model,
+            random_state=random_state,
+            generate_kwargs=generate_kwargs,
+        )
+        synth_data = synth_data[custom_constraint.validity_func(synth_data)]
+        custom_constrained_synth_data = pd.concat(
+            [custom_constrained_synth_data, synth_data], ignore_index=True
+        ).reset_index(drop=True)
+        if (
+            len(custom_constrained_synth_data)
+            >= custom_constraint.custom_constraint_count
+        ):
+          custom_constrained_synth_data = custom_constrained_synth_data.iloc[
+              : custom_constraint.custom_constraint_count, :
+          ]
+          break
+
+    # generate other constrained synthetic data
+    other_synth_data = generate_synthetic_data_with_synthetic_data_model(
         count=count,
         model=self.best_synthetic_data_model,
         random_state=random_state,
         generate_kwargs=generate_kwargs,
+    )
+    return (
+        pd.concat(
+            [custom_constrained_synth_data, other_synth_data], ignore_index=True
+        )
+        .sample(frac=1)
+        .reset_index(drop=True)
     )
