@@ -23,5 +23,5 @@ tsai == 0.3.2
 wheel == 0.41.2
 pandas == 1.5.3
 optuna == 3.3.0
-ipython == 7.34.0
+ipython == 8.10.0
 synthcity >= 0.2.9
