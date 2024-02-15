@@ -14,7 +14,7 @@
 
 fastapi == 0.104.1
 kaleido == 0.2.1
-python-multipart == 0.0.6
+python-multipart == 0.0.7
 uvicorn == 0.24.0
 typing-extensions == 4.8.0
 numpy == 1.23.5
