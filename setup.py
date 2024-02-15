@@ -55,7 +55,7 @@ _INSTALL_REQUIREMENTS: Final[str] = _parse_requirements(
 
 
 setuptools.setup(
-    name="auto-synthetic-data-platfrom",
+    name="auto-synthetic-data-platform",
     version=_VERSION,
     python_requires=">=3.10",
     description=(
