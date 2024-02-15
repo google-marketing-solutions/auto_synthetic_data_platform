@@ -1,4 +1,4 @@
-# Copyright 2023 Google LLC.
+# Copyright 2024 Google LLC.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,42 +11,71 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#!/usr/bin/env python
 
-"""The setup script."""
+"""The setup script for Auto Synthetic Data Platform."""
 
-import pathlib
-from setuptools import find_packages
-from setuptools import setup
+from typing import Final
+import os
+import setuptools
 
 
-with pathlib.Path('requirements.txt').open() as requirements_path:
-  requirements = requirements_path.read().splitlines()
+_CURRENT_DIR: Final[str] = os.path.dirname(os.path.abspath(__file__))
 
-setup(
-    author='Google EMEA gPS Data Science Team',
-    python_requires='>=3.10',
-    classifiers=[
-        'Development Status :: 2 - Pre-Alpha',
-        'Intended Audience :: Developers',
-        'License :: OSI Approved :: Apache Software License',
-        'Natural Language :: English',
-        'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.10',
-    ],
-    description=(
-        "Google EMEA gPS Data Science Team's solution to create privacy-safe"
-        ' synthetic data out of real data. The solution is a wrapper around the'
-        ' synthcity package (https://github.com/vanderschaarlab/synthcity)'
-        ' simplifying the process of model tuning.'
-    ),
-    install_requires=requirements,
-    license='Apache Software License 2.0',
-    packages=find_packages(
-        include=[
-            'auto_synthetic_data_platform',
-            'auto_synthetic_data_platform.*',
+
+def _get_readme():
+    try:
+        readme = open(os.path.join(_CURRENT_DIR, "README.md"), encoding="utf-8").read()
+    except OSError:
+        readme = ""
+    return readme
+
+
+def _get_version():
+    with open(os.path.join(_CURRENT_DIR, "auto_synthetic_data_platform", "__init__.py")) as fp:
+        for line in fp:
+            if line.startswith("__version__") and "=" in line:
+                version = line[line.find("=") + 1 :].strip(" '\"\n")
+                if version:
+                    return version
+        raise ValueError("`__version__` not defined in `auto_synthetic_data_platform/__init__.py`")
+
+
+def _parse_requirements(path):
+    with open(os.path.join(_CURRENT_DIR, path)) as f:
+        return [
+            line.rstrip() for line in f if not (line.isspace() or line.startswith("#"))
         ]
+
+
+_VERSION: Final[str] = _get_version()
+_README: Final[str] = _get_readme()
+_INSTALL_REQUIREMENTS: Final[str] = _parse_requirements(
+    os.path.join(_CURRENT_DIR, "requirements.txt")
+)
+
+
+setuptools.setup(
+    name="auto-synthetic-data-platfrom",
+    version=_VERSION,
+    python_requires=">=3.10",
+    description=(
+        "Google EMEA gTech Ads Data Science Team's solution to create privacy-safe"
+        " synthetic data out of real data. The solution is a wrapper around the"
+        " synthcity package (https://github.com/vanderschaarlab/synthcity)"
+        " simplifying the process of model tuning."
     ),
-    version='0.1.0',
+    long_description=_README,
+    long_description_content_type="text/markdown",
+    author="Google gTech Ads EMEA Privacy Data Science Team",
+    license="Apache Software License 2.0",
+    packages=setuptools.find_packages(),
+    install_requires=_INSTALL_REQUIREMENTS,
+    url="https://github.com/google-marketing-solutions/auto_synthetic_data_platform",
+    keywords="1pd privacy ai ml marketing",
+    classifiers=[
+        "Intended Audience :: Developers",
+        "Intended Audience :: Science/Research",
+        "License :: OSI Approved :: Apache Software License",
+        "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    ],
 )
